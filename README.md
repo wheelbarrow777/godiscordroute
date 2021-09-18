@@ -36,7 +36,7 @@ cmd := discord.NewCommand().SetHandler(
 			Description: "A basic binding command",
 		}).Build()
 
-binding, err := discord.NewBinding(viper.GetString("Discord.Guild"), viper.GetString("Discord.Token"))
+binding, err := discord.NewBinding("guildid", "bottoken")
 if err != nil {
     panic(err)
 }
