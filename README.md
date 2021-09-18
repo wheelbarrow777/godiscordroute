@@ -7,6 +7,10 @@ A basic wrapper for godiscord. Adds gorilla mux like syntax for godiscord applic
 ## Example
 
 ```go
+import(
+    discord "github.com/wheelbarrow777/godiscordroute"
+)
+
 func loggingMiddlewareTwo(next discord.Handler) discord.Handler {
 	return discord.HandlerFunc(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
         // Do stuff here
