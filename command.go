@@ -47,5 +47,12 @@ func (dc *DiscordCommad) AddMiddleware(middleware MiddlewareFunc) CommandBuilder
 }
 
 func (dc *DiscordCommad) Build() DiscordCommad {
+	if dc.handler == nil {
+		panic("handler is nil")
+	}
+
+	if dc.applicationCmd == nil {
+		panic("application command is nil")
+	}
 	return *dc
 }

@@ -3,11 +3,14 @@ package godiscordroute
 import (
 	"fmt"
 
+	"errors"
+
 	"github.com/bwmarrin/discordgo"
 )
 
 var (
-	CommandAlreadyExistError error
+	ErrCommandAlreadyExist = errors.New("command already exist")
+	ErrCommandDoesNotExist = errors.New("command doesn't exist")
 )
 
 type DiscordBinding struct {
@@ -36,6 +39,12 @@ func NewBinding(guild string, token string) (*DiscordBinding, error) {
 	b.token = token
 
 	b.sesssion.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("PANIC Occured in discord handler. Recovered: %s", r)
+				SimpleUpdateMessage(s, i, "internal server error")
+			}
+		}()
 		// Identify the discord command
 		if cmd, ok := b.commands[i.ApplicationCommandData().Name]; ok {
 			// Build Middleware Chain
@@ -57,7 +66,7 @@ func (b *DiscordBinding) AddCommand(cmd DiscordCommad) error {
 	// Register command handler
 	if _, ok := b.commands[cmd.applicationCmd.Name]; ok {
 		// Key already exists, can't add
-		return CommandAlreadyExistError
+		return ErrCommandAlreadyExist
 	}
 	b.commands[cmd.applicationCmd.Name] = cmd
 
@@ -65,6 +74,18 @@ func (b *DiscordBinding) AddCommand(cmd DiscordCommad) error {
 	_, err := b.sesssion.ApplicationCommandCreate(b.sesssion.State.User.ID, b.guild, cmd.applicationCmd)
 	if err != nil {
 		return fmt.Errorf("could not add discord command: %w", err)
+	}
+	return nil
+}
+
+func (b *DiscordBinding) DeleteAllCommands() error {
+	cmds, err := b.sesssion.ApplicationCommands(b.sesssion.State.User.ID, b.guild)
+
+	for _, cmd := range cmds {
+		err = b.sesssion.ApplicationCommandDelete(cmd.ApplicationID, b.guild, cmd.ID)
+		if err != nil {
+			return fmt.Errorf("could not delete application command: %w", err)
+		}
 	}
 	return nil
 }
