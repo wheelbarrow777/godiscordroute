@@ -16,7 +16,7 @@ var (
 type DiscordBinding struct {
 	guild    string
 	token    string
-	sesssion *discordgo.Session
+	session  *discordgo.Session
 	commands map[string]DiscordCommad
 }
 
@@ -28,9 +28,9 @@ func NewBinding(guild string, token string) (*DiscordBinding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not create discordgo instance: %w", err)
 	}
-	b.sesssion = s
+	b.session = s
 
-	err = b.sesssion.Open()
+	err = b.session.Open()
 	if err != nil {
 		return nil, fmt.Errorf("could not open session: %w", err)
 	}
@@ -38,7 +38,7 @@ func NewBinding(guild string, token string) (*DiscordBinding, error) {
 	b.guild = guild
 	b.token = token
 
-	b.sesssion.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	b.session.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Println("PANIC Occured in discord handler. Recovered: %s", r)
@@ -47,6 +47,12 @@ func NewBinding(guild string, token string) (*DiscordBinding, error) {
 		}()
 		// Identify the discord command
 		if cmd, ok := b.commands[i.ApplicationCommandData().Name]; ok {
+			opts := i.ApplicationCommandData().Options
+			if cmd.hasSubcommand {
+				cmd = b.commands[i.ApplicationCommandData().Options[0].Name]
+				opts = i.ApplicationCommandData().Options[0].Options
+			}
+
 			// Build Middleware Chain
 			for i := len(cmd.middleware) - 1; i >= 0; i-- {
 				cmd.handler = cmd.middleware[i].Middleware(cmd.handler)
@@ -55,7 +61,7 @@ func NewBinding(guild string, token string) (*DiscordBinding, error) {
 					return
 				}
 			}
-			cmd.handler.Respond(s, i)
+			cmd.handler.Respond(s, i, opts)
 		}
 	})
 
@@ -70,19 +76,56 @@ func (b *DiscordBinding) AddCommand(cmd DiscordCommad) error {
 	}
 	b.commands[cmd.applicationCmd.Name] = cmd
 
+	// Add any subcommands
+	for _, subCommand := range cmd.subcommands {
+		cmd.applicationCmd.Options = append(cmd.applicationCmd.Options, &discordgo.ApplicationCommandOption{
+			Type:        discordgo.ApplicationCommandOptionSubCommand,
+			Name:        subCommand.applicationCmd.Name,
+			Description: subCommand.applicationCmd.Description,
+			Options:     subCommand.applicationCmd.Options,
+		})
+
+		b.commands[subCommand.applicationCmd.Name] = *subCommand
+	}
+
 	// Register command with the discord api
-	_, err := b.sesssion.ApplicationCommandCreate(b.sesssion.State.User.ID, b.guild, cmd.applicationCmd)
+	rCmd, err := b.session.ApplicationCommandCreate(b.session.State.User.ID, b.guild, cmd.applicationCmd)
 	if err != nil {
 		return fmt.Errorf("could not add discord command: %w", err)
 	}
+
+	permissionList := discordgo.ApplicationCommandPermissionsList{
+		Permissions: cmd.permissions,
+	}
+
+	if cmd.options.KeepExistingPermissions {
+		// -- Get existing permissions
+		existingPermissions := b.session.ApplicationCommandPermissions(b.session.State.User.ID, b.guild, rCmd.ID)
+		if permissionList.Permissions != nil && existingPermissions != nil {
+			permissionList.Permissions = append(permissionList.Permissions, existingPermissions.Permissions...)
+		} else {
+			permissionList.Permissions = []*discordgo.ApplicationCommandPermissions{}
+		}
+	}
+
+	if len(permissionList.Permissions) > 0 {
+		err = b.session.ApplicationCommandPermissionsEdit(b.session.State.User.ID, b.guild, rCmd.ID, &permissionList)
+		if err != nil {
+			return fmt.Errorf("could not add discord permissions: %w", err)
+		}
+	}
+
 	return nil
 }
 
 func (b *DiscordBinding) DeleteAllCommands() error {
-	cmds, err := b.sesssion.ApplicationCommands(b.sesssion.State.User.ID, b.guild)
+	cmds, err := b.session.ApplicationCommands(b.session.State.User.ID, b.guild)
+	if err != nil {
+		return fmt.Errorf("could not fetch all application commands: %w", err)
+	}
 
 	for _, cmd := range cmds {
-		err = b.sesssion.ApplicationCommandDelete(cmd.ApplicationID, b.guild, cmd.ID)
+		err = b.session.ApplicationCommandDelete(cmd.ApplicationID, b.guild, cmd.ID)
 		if err != nil {
 			return fmt.Errorf("could not delete application command: %w", err)
 		}

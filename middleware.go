@@ -13,13 +13,13 @@ func (mw MiddlewareFunc) Middleware(handler Handler) Handler {
 }
 
 func AckMiddleware(next Handler) Handler {
-	return HandlerFunc(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	return HandlerFunc(func(s *discordgo.Session, i *discordgo.InteractionCreate, opts AppCmdOptions) {
 		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Loading...",
 			},
 		})
-		next.Respond(s, i)
+		next.Respond(s, i, opts)
 	})
 }
