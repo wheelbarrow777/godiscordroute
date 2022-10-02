@@ -100,7 +100,10 @@ func (b *DiscordBinding) AddCommand(cmd DiscordCommad) error {
 
 	if cmd.options.KeepExistingPermissions {
 		// -- Get existing permissions
-		existingPermissions := b.session.ApplicationCommandPermissions(b.session.State.User.ID, b.guild, rCmd.ID)
+		existingPermissions, err := b.session.ApplicationCommandPermissions(b.session.State.User.ID, b.guild, rCmd.ID)
+		if err != nil {
+			return fmt.Errorf("could not read existing permissions")
+		}
 		if permissionList.Permissions != nil && existingPermissions != nil {
 			permissionList.Permissions = append(permissionList.Permissions, existingPermissions.Permissions...)
 		} else {

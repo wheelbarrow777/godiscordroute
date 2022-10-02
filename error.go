@@ -15,8 +15,8 @@ func ErrorUpdate(s *discordgo.Session, i *discordgo.InteractionCreate, errorMsg 
 }
 
 func SimpleUpdateMessage(s *discordgo.Session, i *discordgo.InteractionCreate, msg string) {
-	s.InteractionResponseEdit(s.State.User.ID, i.Interaction, &discordgo.WebhookEdit{
-		Content: msg,
+	s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+		Content: &msg,
 	})
 }
 
